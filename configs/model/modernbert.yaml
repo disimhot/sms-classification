@@ -1,0 +1,3 @@
+model:
+  pretrained_name: "deepvk/RuModernBERT-base"
+  num_labels: 8

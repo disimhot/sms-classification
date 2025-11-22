@@ -25,4 +25,5 @@ jobs:
         run: pip install pre-commit
 
       - name: Run pre-commit on all files
+        working-directory: classification
         run: pre-commit run --all-files

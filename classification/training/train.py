@@ -1,5 +1,5 @@
-from transformers import Trainer, TrainingArguments, EarlyStoppingCallback
-import os
+from transformers import EarlyStoppingCallback, Trainer, TrainingArguments
+
 
 def train_model(model, tokenizer, datasets, compute_metrics, training_cfg):
     args = TrainingArguments(

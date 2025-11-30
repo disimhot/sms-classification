@@ -1,0 +1,32 @@
+seed: 42
+
+data:
+  data_dir: "../../data"
+
+model:
+  type: "bert" # "mlp" or "bert"
+  num_classes: 13
+  dropout: 0.1
+  output_path: "../../models/bert.pt"
+  # MLP specific
+  vector_size: 300
+  # BERT specific
+  freeze_bert: false
+
+training:
+  max_epochs: 10
+  batch_size: 32
+  learning_rate: 2e-5
+  loss_type: "cross_entropy" # "cross_entropy", "focal", "nll"
+  focal_gamma: 2.0
+  log_every_n_steps: 10
+
+logging:
+  experiment_name: "sms-classification"
+  tracking_uri: "mlruns"
+  save_dir: "logs"
+
+callbacks:
+  dirpath: "checkpoints"
+  filename: "{epoch}-{val_f1_weighted:.3f}"
+  patience: 3

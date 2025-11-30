@@ -146,7 +146,7 @@ class SMSDataModule(L.LightningDataModule):
         )
 
     def predict_dataloader(self) -> DataLoader:
-        """Возвращает DataLoader для предсказаний."""
+        """Returns DataLoader for prediction."""
         if self.predict_dataset is None:
             raise ValueError("Predict dataset is not initialized. Call setup('predict') first.")
         return DataLoader(

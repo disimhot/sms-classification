@@ -45,7 +45,7 @@ class SMSDataset(Dataset):
 
 
 class SMSDataModule(L.LightningDataModule):
-    """Lightning DataModule для работы с SMS данными."""
+    """Lightning DataModule for SMS data."""
 
     def __init__(
         self,
@@ -111,7 +111,7 @@ class SMSDataModule(L.LightningDataModule):
             )
 
     def train_dataloader(self) -> DataLoader:
-        """:returns DataLoader for training."""
+        """Returns DataLoader for training."""
         if self.train_dataset is None:
             raise ValueError("Train dataset is not initialized. Call setup('fit') first.")
         return DataLoader(
@@ -122,7 +122,7 @@ class SMSDataModule(L.LightningDataModule):
         )
 
     def val_dataloader(self) -> DataLoader:
-        """Возвращает DataLoader для валидации."""
+        """Returns DataLoader for validation."""
         if self.val_dataset is None:
             raise ValueError(
                 "Validation dataset is not initialized. Call setup('fit') or setup('validate') first."
@@ -228,24 +228,3 @@ class SMSDataManager:
             test_df=self._data_cache["test"],
             predict_df=self._data_cache["predict"],
         )
-
-
-# Вариант 1: Прямое использование DataModule
-# if __name__ == "__main__":
-#     manager = SMSDataManager(Path("../../data"))
-#     manager.load_all()  # закодировали метки и сохранили в DataFrame
-#
-#     dm = manager.create_datamodule(batch_size=32)
-#     dm.prepare_data()   # не будет заново читать CSV
-#     dm.setup("fit")     # использует готовые DataFrame
-#     batch = next(iter(dm.train_dataloader()))
-#     print(batch)
-
-
-# Вариант 2: Использование через менеджер
-# manager = SMSDataManager(data_dir=Path("./data"))
-# data_module = manager.create_datamodule(batch_size=64)
-
-# Подготовка и использование с Lightning Trainer
-# trainer = L.Trainer()
-# trainer.fit(model, data_module)

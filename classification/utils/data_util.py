@@ -46,7 +46,6 @@ def ensure_data_downloaded(required_paths: list[str | Path]) -> bool:
     if not success:
         return False
 
-    # Проверяем ещё раз после pull
     still_missing = [p for p in paths if not p.exists()]
     if still_missing:
         print(f"После DVC pull всё ещё отсутствуют: {still_missing}")

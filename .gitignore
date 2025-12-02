@@ -211,3 +211,5 @@ models/*
 checkpoints
 mlruns
 outputs
+.env
+/data

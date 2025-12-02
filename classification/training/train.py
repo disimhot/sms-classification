@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import hydra
@@ -10,11 +11,23 @@ from classification.models.loss import compute_class_weights
 from classification.models.mlp import MLPClassifier
 from classification.models.word2vec import Word2VecDataset, Word2VecEmbedder
 from classification.module.module import SMSClassificationModule
+from classification.utils.data_util import ensure_data_downloaded
 from omegaconf import DictConfig
 
 
 @hydra.main(version_base=None, config_path="../conf", config_name="train")
 def main(cfg: DictConfig):
+    data_dir = Path(cfg.data.data_dir)
+    required_paths = [
+        str(data_dir / "train.csv"),
+        str(data_dir / "val.csv"),
+        str(data_dir / "test.csv"),
+    ]
+
+    if not ensure_data_downloaded(required_paths):
+        print("Failed to download required data")
+        sys.exit()
+
     L.seed_everything(cfg.seed)
 
     # Load data

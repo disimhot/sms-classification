@@ -4,7 +4,7 @@ data:
   data_dir: "../../data"
 
 model:
-  type: "mlp" # "mlp" or "bert"
+  type: "bert" # "mlp" or "bert"
   num_classes: 13
   dropout: 0.1
   output_path: "../../models/mlp.pt"

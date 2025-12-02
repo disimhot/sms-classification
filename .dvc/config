@@ -1,0 +1,6 @@
+[core]
+    remote = yandex_s3
+    autostage = true
+['remote "yandex_s3"']
+    url = s3://disimhot/data
+    endpointurl = https://storage.yandexcloud.net

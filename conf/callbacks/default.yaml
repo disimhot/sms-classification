@@ -1,0 +1,13 @@
+checkpoint:
+  dirpath: data/checkpoints
+  filename: "{epoch}-{val_f1_weighted:.3f}"
+  monitor: val_f1_weighted
+  mode: max
+  save_top_k: 1
+  every_n_epochs: 1
+
+early_stopping:
+  monitor: val_f1_weighted
+  mode: max
+  patience: 3
+  min_delta: 0.001

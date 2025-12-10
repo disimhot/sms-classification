@@ -1,0 +1,12 @@
+type: mlp
+dropout: 0.3
+output_path: output/models/mlp.pt
+
+word2vec:
+  vector_size: 300
+  window: 5
+  min_count: 1
+  workers: 4
+  sg: 1
+  epochs: 10
+  output_path: output/models/word2vec.model

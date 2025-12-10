@@ -1,0 +1,4 @@
+experiment_name: sms-classification
+tracking_uri: http://127.0.0.1:8080
+save_dir: output/logs
+log_model: true

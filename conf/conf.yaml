@@ -1,0 +1,10 @@
+defaults:
+  - data: default
+  - models: bert
+  - module: default
+  - training: default
+  - logging: default
+  - callbacks: default
+  - _self_
+
+seed: 42

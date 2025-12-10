@@ -1,27 +1,35 @@
 import sys
 from pathlib import Path
 
-import hydra
 import lightning as L
 import torch
 from classification.data.dataset_loader import SMSDataManager
 from classification.data.preprocess import TextPreprocessor
-from classification.models.bert import BertClassifier, BertDataset, collate_fn
+from classification.models.bert import BertClassifier, BertDataset, BertTokenizerWrapper, collate_fn
 from classification.models.loss import compute_class_weights
 from classification.models.mlp import MLPClassifier
 from classification.models.word2vec import Word2VecDataset, Word2VecEmbedder
 from classification.module.module import SMSClassificationModule
+from classification.utils.commit_id import _get_git_commit
+from classification.utils.config import load_config
 from classification.utils.data_util import ensure_data_downloaded
-from omegaconf import DictConfig
+from omegaconf import OmegaConf
 
 
-@hydra.main(version_base=None, config_path="../conf", config_name="train")
-def main(cfg: DictConfig):
+def train(overrides: list[str] | None = None):
+    """
+    Train SMS classification model.
+
+    Args:
+        overrides: List of Hydra config overrides, e.g. ["models=mlp", "training.max_epochs=5"]
+    """
+    cfg = load_config(overrides)
+
     data_dir = Path(cfg.data.data_dir)
     required_paths = [
-        str(data_dir / "train.csv"),
-        str(data_dir / "val.csv"),
-        str(data_dir / "test.csv"),
+        str(data_dir / cfg.data.train_file),
+        str(data_dir / cfg.data.val_file),
+        str(data_dir / cfg.data.test_file),
     ]
 
     if not ensure_data_downloaded(required_paths):
@@ -31,7 +39,7 @@ def main(cfg: DictConfig):
     L.seed_everything(cfg.seed)
 
     # Load data
-    manager = SMSDataManager(Path(cfg.data.data_dir))
+    manager = SMSDataManager(data_dir)
     data = manager.load_all()
 
     train_texts = data["train"]["text"].tolist()
@@ -40,14 +48,14 @@ def main(cfg: DictConfig):
     val_labels = data["val"]["label"].tolist()
 
     # Compute class weights
-    class_weights = compute_class_weights(train_labels, cfg.model.num_classes)
+    class_weights = compute_class_weights(train_labels, cfg.module.num_classes)
 
     # Create model and dataloaders based on model type
-    if cfg.model.type == "mlp":
+    if cfg.models.type == "mlp":
         model, train_loader, val_loader = _setup_mlp(
             cfg, train_texts, val_texts, train_labels, val_labels
         )
-    elif cfg.model.type == "bert":
+    elif cfg.models.type == "bert":
         model, train_loader, val_loader = _setup_bert(
             cfg, train_texts, val_texts, train_labels, val_labels
         )
@@ -55,38 +63,43 @@ def main(cfg: DictConfig):
     # Create Lightning module
     module = SMSClassificationModule(
         model=model,
-        num_classes=cfg.model.num_classes,
+        num_classes=cfg.module.num_classes,
         class_weights=class_weights,
-        learning_rate=cfg.training.learning_rate,
-        loss_type=cfg.training.loss_type,
-        focal_gamma=cfg.training.focal_gamma,
+        learning_rate=cfg.module.optimizer.learning_rate,
+        loss_type=cfg.module.loss.type,
+        focal_gamma=cfg.module.loss.focal_gamma,
+        scheduler_eta_min=cfg.module.scheduler.eta_min,
     )
 
     # Loggers
-    loggers = [
-        L.pytorch.loggers.MLFlowLogger(
-            experiment_name=cfg.logging.experiment_name,
-            tracking_uri=cfg.logging.tracking_uri,
-            save_dir=cfg.logging.save_dir,
-        ),
-    ]
+    mlflow_logger = L.pytorch.loggers.MLFlowLogger(
+        experiment_name=cfg.logging.experiment_name,
+        tracking_uri=cfg.logging.tracking_uri,
+        save_dir=cfg.logging.save_dir,
+    )
+    mlflow_logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
+    mlflow_logger.experiment.set_tag(mlflow_logger.run_id, "stage", "train")
+    mlflow_logger.experiment.log_param(mlflow_logger.run_id, "git_commit", _get_git_commit())
+
+    loggers = [mlflow_logger]
 
     # Callbacks
     callbacks = [
         L.pytorch.callbacks.LearningRateMonitor(logging_interval="step"),
         L.pytorch.callbacks.RichModelSummary(max_depth=2),
         L.pytorch.callbacks.ModelCheckpoint(
-            dirpath=cfg.callbacks.dirpath,
-            filename=cfg.callbacks.filename,
-            monitor="val_f1_weighted",
-            mode="max",
-            save_top_k=1,
-            every_n_epochs=1,
+            dirpath=cfg.callbacks.checkpoint.dirpath,
+            filename=cfg.callbacks.checkpoint.filename,
+            monitor=cfg.callbacks.checkpoint.monitor,
+            mode=cfg.callbacks.checkpoint.mode,
+            save_top_k=cfg.callbacks.checkpoint.save_top_k,
+            every_n_epochs=cfg.callbacks.checkpoint.every_n_epochs,
         ),
         L.pytorch.callbacks.EarlyStopping(
-            monitor="val_f1_weighted",
-            mode="max",
-            patience=cfg.callbacks.patience,
+            monitor=cfg.callbacks.early_stopping.monitor,
+            mode=cfg.callbacks.early_stopping.mode,
+            patience=cfg.callbacks.early_stopping.patience,
+            min_delta=cfg.callbacks.early_stopping.min_delta,
         ),
     ]
 
@@ -103,7 +116,7 @@ def main(cfg: DictConfig):
     trainer.fit(module, train_dataloaders=train_loader, val_dataloaders=val_loader)
 
     # Save final model
-    torch.save(module.model.state_dict(), cfg.model.output_path)
+    torch.save(module.model.state_dict(), cfg.models.output_path)
 
 
 def _setup_mlp(cfg, train_texts, val_texts, train_labels, val_labels):
@@ -117,13 +130,19 @@ def _setup_mlp(cfg, train_texts, val_texts, train_labels, val_labels):
     val_tokenized = [text.split() for text in val_clean]
 
     # Train Word2Vec
-    embedder = Word2VecEmbedder(vector_size=cfg.model.vector_size)
-    train_embeddings = embedder.fit_transform(train_tokenized)
+    w2v_cfg = cfg.models.word2vec
+    embedder = Word2VecEmbedder(
+        vector_size=w2v_cfg.vector_size,
+        window=w2v_cfg.window,
+        min_count=w2v_cfg.min_count,
+        workers=w2v_cfg.workers,
+        sg=w2v_cfg.sg,
+    )
+    train_embeddings = embedder.fit_transform(train_tokenized, epochs=w2v_cfg.epochs)
     val_embeddings = embedder.transform(val_tokenized)
 
     # Save Word2Vec
-    w2v_path = Path(cfg.model.output_path).parent / "word2vec.model"
-    embedder.save(w2v_path)
+    embedder.save(w2v_cfg.output_path)
 
     # Datasets
     train_dataset = Word2VecDataset(train_embeddings, train_labels)
@@ -137,9 +156,9 @@ def _setup_mlp(cfg, train_texts, val_texts, train_labels, val_labels):
     )
 
     model = MLPClassifier(
-        input_dim=cfg.model.vector_size,
-        num_classes=cfg.model.num_classes,
-        dropout=cfg.model.dropout,
+        input_dim=w2v_cfg.vector_size,
+        num_classes=cfg.module.num_classes,
+        dropout=cfg.models.dropout,
     )
 
     return model, train_loader, val_loader
@@ -147,8 +166,13 @@ def _setup_mlp(cfg, train_texts, val_texts, train_labels, val_labels):
 
 def _setup_bert(cfg, train_texts, val_texts, train_labels, val_labels):
     """Setup BERT model."""
-    train_dataset = BertDataset(train_texts, train_labels)
-    val_dataset = BertDataset(val_texts, val_labels)
+    tokenizer = BertTokenizerWrapper(
+        pretrained_model=cfg.models.pretrained_model,
+        max_length=cfg.models.max_length,
+    )
+
+    train_dataset = BertDataset(train_texts, train_labels, tokenizer=tokenizer)
+    val_dataset = BertDataset(val_texts, val_labels, tokenizer=tokenizer)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
@@ -164,13 +188,10 @@ def _setup_bert(cfg, train_texts, val_texts, train_labels, val_labels):
     )
 
     model = BertClassifier(
-        num_classes=cfg.model.num_classes,
-        dropout=cfg.model.dropout,
-        freeze_bert=cfg.model.freeze_bert,
+        num_classes=cfg.module.num_classes,
+        pretrained_model=cfg.models.pretrained_model,
+        dropout=cfg.models.dropout,
+        freeze_bert=cfg.models.freeze_bert,
     )
 
     return model, train_loader, val_loader
-
-
-if __name__ == "__main__":
-    main()

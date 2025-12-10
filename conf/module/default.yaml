@@ -1,0 +1,11 @@
+num_classes: 13
+
+loss:
+  type: cross_entropy # cross_entropy, focal, nll
+  focal_gamma: 2.0
+
+optimizer:
+  learning_rate: 1e-3
+
+scheduler:
+  eta_min: 1e-7

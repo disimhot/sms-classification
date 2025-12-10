@@ -3,8 +3,6 @@ from torch import nn
 from torch.nn.utils.rnn import pad_sequence
 from transformers import AutoModel, AutoTokenizer
 
-MODEL_NAME = "deepvk/RuModernBERT-base"
-
 
 class BertClassifier(nn.Module):
     """
@@ -12,6 +10,7 @@ class BertClassifier(nn.Module):
 
     Args:
         num_classes: Number of output classes
+        pretrained_model: HuggingFace model name
         dropout: Dropout probability (default 0.1)
         freeze_bert: Whether to freeze BERT weights (default False)
     """
@@ -19,12 +18,13 @@ class BertClassifier(nn.Module):
     def __init__(
         self,
         num_classes: int,
+        pretrained_model: str,
         dropout: float = 0.1,
         freeze_bert: bool = False,
     ):
         super().__init__()
 
-        self.bert = AutoModel.from_pretrained(MODEL_NAME)
+        self.bert = AutoModel.from_pretrained(pretrained_model)
         self.num_classes = num_classes
 
         if freeze_bert:
@@ -67,11 +67,16 @@ class BertTokenizerWrapper:
     Tokenizer wrapper for RuModernBERT.
 
     Args:
+        pretrained_model: HuggingFace model name
         max_length: Maximum sequence length (default 256)
     """
 
-    def __init__(self, max_length: int = 256):
-        self.tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    def __init__(
+        self,
+        pretrained_model: str,
+        max_length: int = 256,
+    ):
+        self.tokenizer = AutoTokenizer.from_pretrained(pretrained_model)
         self.max_length = max_length
 
     def __call__(self, texts: list[str]) -> dict[str, torch.Tensor]:
@@ -116,9 +121,6 @@ class BertDataset(torch.utils.data.Dataset):
     ):
         self.texts = texts
         self.labels = labels
-
-        if tokenizer is None:
-            tokenizer = BertTokenizerWrapper()
         self.tokenizer = tokenizer
 
     def __len__(self) -> int:

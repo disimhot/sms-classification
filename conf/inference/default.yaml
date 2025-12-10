@@ -1,0 +1,3 @@
+model_path: output/checkpoints/best.ckpt
+output_path: output/predictions
+batch_size: 64

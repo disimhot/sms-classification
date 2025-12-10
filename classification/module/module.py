@@ -15,7 +15,8 @@ class SMSClassificationModule(L.LightningModule):
         class_weights: Optional class weights for imbalanced data
         learning_rate: Learning rate for optimizer
         loss_type: Loss function type ('cross_entropy', 'focal', 'nll')
-        focal_gamma: Gamma parameter for Focal Loss (default 2.0)
+        focal_gamma: Gamma parameter for Focal Los
+        scheduler_eta_min: Minimum learning rate for scheduler
     """
 
     def __init__(
@@ -23,9 +24,10 @@ class SMSClassificationModule(L.LightningModule):
         model: nn.Module,
         num_classes: int = 13,
         class_weights: torch.Tensor | None = None,
-        learning_rate: float = 2e-5,
+        learning_rate: float = 1e-3,
         loss_type: str = "cross_entropy",
         focal_gamma: float = 2.0,
+        scheduler_eta_min: float = 1e-7,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=["model", "criterion"])
@@ -33,6 +35,7 @@ class SMSClassificationModule(L.LightningModule):
         self.model = model
         self.num_classes = num_classes
         self.learning_rate = learning_rate
+        self.scheduler_eta_min = scheduler_eta_min
 
         # Loss
         self.criterion = self._create_loss(loss_type, class_weights, focal_gamma)
@@ -228,7 +231,9 @@ class SMSClassificationModule(L.LightningModule):
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate)
 
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=self.trainer.estimated_stepping_batches, eta_min=1e-7
+            optimizer,
+            T_max=self.trainer.estimated_stepping_batches,
+            eta_min=self.scheduler_eta_min,
         )
 
         return {

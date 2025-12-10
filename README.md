@@ -2,8 +2,26 @@
 
 ## Стуктура проекта
 
-github actions
+# Запустить всё (MLflow + train)
 
-образы Docker для обучения и тестирования для всех сервисов, собранные kuber
+docker-compose up
 
-triton server для сервера
+# В фоне
+
+docker-compose up -d
+
+# С пересборкой образа
+
+docker-compose up --build
+
+# MLflow
+
+docker-compose up mlflow
+
+# Тренировка
+
+docker-compose --profile train up
+
+# Инференс
+
+docker-compose --profile infer up

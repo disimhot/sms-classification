@@ -36,7 +36,28 @@ services:
       - ./output:/app/output
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:8080
-    command: uv run python commands.py train
+    command: uv run --project classification python commands.py train
+    profiles:
+      - train
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sms-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./output:/app/output
+    command:
+      uv run --project classification python commands.py serve --host 0.0.0.0
+      --port 8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   mlflow-data:

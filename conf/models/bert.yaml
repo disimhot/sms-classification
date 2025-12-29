@@ -2,5 +2,5 @@ type: bert
 pretrained_model: DeepPavlov/rubert-base-cased
 dropout: 0.1
 freeze_bert: false
-max_length: 256
+max_length: 128
 output_path: output/models/bert.pt

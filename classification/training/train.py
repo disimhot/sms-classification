@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-import lightning as L
+import lightning as pl
 import torch
 from classification.data.dataset_loader import SMSDataManager
 from classification.data.preprocess import TextPreprocessor
@@ -36,11 +36,12 @@ def train(overrides: list[str] | None = None):
         print("Failed to download required data")
         sys.exit()
 
-    L.seed_everything(cfg.seed)
+    pl.seed_everything(cfg.seed)
 
-    # Load data
     manager = SMSDataManager(data_dir)
     data = manager.load_all()
+
+    manager.save_label_encoder()
 
     train_texts = data["train"]["text"].tolist()
     val_texts = data["val"]["text"].tolist()
@@ -72,7 +73,7 @@ def train(overrides: list[str] | None = None):
     )
 
     # Loggers
-    mlflow_logger = L.pytorch.loggers.MLFlowLogger(
+    mlflow_logger = pl.pytorch.loggers.MLFlowLogger(
         experiment_name=cfg.logging.experiment_name,
         tracking_uri=cfg.logging.tracking_uri,
         save_dir=cfg.logging.save_dir,
@@ -85,9 +86,9 @@ def train(overrides: list[str] | None = None):
 
     # Callbacks
     callbacks = [
-        L.pytorch.callbacks.LearningRateMonitor(logging_interval="step"),
-        L.pytorch.callbacks.RichModelSummary(max_depth=2),
-        L.pytorch.callbacks.ModelCheckpoint(
+        pl.pytorch.callbacks.LearningRateMonitor(logging_interval="step"),
+        pl.pytorch.callbacks.RichModelSummary(max_depth=2),
+        pl.pytorch.callbacks.ModelCheckpoint(
             dirpath=cfg.callbacks.checkpoint.dirpath,
             filename=cfg.callbacks.checkpoint.filename,
             monitor=cfg.callbacks.checkpoint.monitor,
@@ -95,7 +96,7 @@ def train(overrides: list[str] | None = None):
             save_top_k=cfg.callbacks.checkpoint.save_top_k,
             every_n_epochs=cfg.callbacks.checkpoint.every_n_epochs,
         ),
-        L.pytorch.callbacks.EarlyStopping(
+        pl.pytorch.callbacks.EarlyStopping(
             monitor=cfg.callbacks.early_stopping.monitor,
             mode=cfg.callbacks.early_stopping.mode,
             patience=cfg.callbacks.early_stopping.patience,
@@ -104,7 +105,7 @@ def train(overrides: list[str] | None = None):
     ]
 
     # Trainer
-    trainer = L.Trainer(
+    trainer = pl.Trainer(
         max_epochs=cfg.training.max_epochs,
         log_every_n_steps=cfg.training.log_every_n_steps,
         accelerator="auto",

@@ -4,24 +4,7 @@ repos:
     hooks:
       - id: ruff-format
       - id: ruff-check
-        args:
-          [
-            --fix,
-            --ignore,
-            N812,
-            --ignore,
-            RUF002,
-            --ignore,
-            RUF003,
-            --ignore,
-            RUF001,
-            --ignore,
-            PLR0913,
-            --ignore,
-            E501,
-            --ignore,
-            RUF001,
-          ]
+        args: [--fix]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0

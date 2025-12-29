@@ -9,11 +9,13 @@ RUN apt-get update && apt-get install -y \
 
 RUN pip install uv
 
-COPY classification/pyproject.toml classification/uv.lock ./
+COPY classification/pyproject.toml classification/uv.lock ./classification/
 
-RUN uv sync --frozen
+RUN cd classification && uv sync --frozen
 
 COPY . .
 
+EXPOSE 8000
+
 # Default command
-CMD ["uv", "run", "python", "commands.py", "train"]
+CMD ["uv", "run", "--project", "classification", "python", "commands.py", "serve", "--host", "0.0.0.0"]

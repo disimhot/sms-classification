@@ -166,7 +166,7 @@ uv run --project classification python commands.py train
 uv run --project classification python commands.py train models=mlp
 
 # С переопределением параметров
-uv run --project classification python commands.py train training.batch_size=8 training.max_epochs=10
+uv run --project classification python commands.py train "['training.batch_size=8', 'training.max_epochs=10']"
 ```
 
 ### Конфигурация

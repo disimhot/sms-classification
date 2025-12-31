@@ -442,8 +442,8 @@ uv add <package>
 
 MIT
 
-MLflow by [MLflow](https://mlflow.org/) ![MLflow.png](data_example/MLflow.png)
+MLflow by [MLflow](https://mlflow.org/) ![MLflow.png](assets/MLflow.png)
 
 Server by [FastAPI](https://fastapi.tiangolo.com/)
-![SMS-Classification-API-Swagger-UI.png](data_example/SMS-Classification-API-Swagger-UI.png)
-![SMS-Classification-API-Swagger-UI1.png](data_example/SMS-Classification-API-Swagger-UI1.png)
+![SMS-Classification-API-Swagger-UI.png](assets/SMS-Classification-API-Swagger-UI.png)
+![SMS-Classification-API-Swagger-UI1.png](assets/SMS-Classification-API-Swagger-UI1.png)

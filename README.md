@@ -19,6 +19,11 @@
 - **Разбиение**: train/val/test
 - **Хранение**: DVC (Data Version Control)
 
+> ⚠️ **Важно**: В папке
+> https://drive.google.com/drive/folders/1OpsoxTVF5wgCMFRi6KoErKTYVIRVvFOe?usp=sharing
+> оставлены сэпмлы нечувствительных данных. За ключами доступа к S3/DVC
+> обращайтесь лично к автору проекта тг @ElenaSergeevna.
+
 ### Модели
 
 Проект поддерживает две архитектуры:
@@ -32,6 +37,15 @@
    - Предобученная модель DeepPavlov/rubert-base-cased
    - Fine-tuning на задачу классификации
    - Лучшее качество, но требует больше ресурсов
+
+### Loss функции
+
+BERTподдерживает несколько функций потерь для работы с несбалансированными
+данными:
+
+- cross_entropy loss
+- nll loss
+- focal loss
 
 ### Предобработка текста
 
@@ -96,6 +110,7 @@ sms-classification/
 ├── commands.py               # CLI точка входа
 ├── docker-compose.yaml
 ├── Dockerfile
+├── .env.example              # Шаблон переменных окружения
 └── data.dvc
 ```
 
@@ -109,7 +124,6 @@ sms-classification/
 ### Установка uv
 
 ```bash
-
 pip install uv
 ```
 
@@ -127,6 +141,15 @@ cd ..
 
 # Настроить pre-commit хуки
 uv run --project classification pre-commit install
+```
+
+### Настройка окружения
+
+```bash
+# Скопировать шаблон переменных окружения
+cp .env.example .env
+
+# Заполнить .env своими ключами (обратитесь к автору за доступом)
 ```
 
 ### Загрузка данных
@@ -164,9 +187,43 @@ uv run --project classification python commands.py train
 
 # MLP модель
 uv run --project classification python commands.py train models=mlp
+```
 
-# С переопределением параметров
-uv run --project classification python commands.py train "['training.batch_size=8', 'training.max_epochs=10']"
+### Эксперименты с Loss функциями
+
+```bash
+# Cross Entropy (baseline)
+uv run --project classification python commands.py train module.loss.type=cross_entropy
+
+# Focal Loss с gamma=2.0 (default)
+uv run --project classification python commands.py train module.loss.type=focal
+
+# Focal Loss с разными значениями gamma
+uv run --project classification python commands.py train module.loss.type=focal module.loss.focal_gamma=1.0
+uv run --project classification python commands.py train module.loss.type=focal module.loss.focal_gamma=2.0
+uv run --project classification python commands.py train module.loss.type=focal module.loss.focal_gamma=3.0
+uv run --project classification python commands.py train module.loss.type=focal module.loss.focal_gamma=5.0
+
+# Комбинация модели и loss
+uv run --project classification python commands.py train models=mlp module.loss.type=focal module.loss.focal_gamma=2.0
+```
+
+### Другие параметры обучения
+
+```bash
+# Изменение learning rate
+uv run --project classification python commands.py train module.optimizer.learning_rate=1e-4
+
+# Изменение batch size и epochs
+uv run --project classification python commands.py train training.batch_size=16 training.max_epochs=100
+
+# Комбинация нескольких параметров
+uv run --project classification python commands.py train \
+    models=bert \
+    module.loss.type=focal \
+    module.loss.focal_gamma=2.0 \
+    training.batch_size=16 \
+    training.max_epochs=50
 ```
 
 ### Конфигурация
@@ -179,6 +236,20 @@ uv run --project classification python commands.py train "['training.batch_size=
 max_epochs: 50
 batch_size: 32
 log_every_n_steps: 10
+```
+
+**module/default.yaml**
+
+```yaml
+loss:
+  type: cross_entropy # cross_entropy | focal | nll
+  focal_gamma: 2.0 # только для focal loss
+
+optimizer:
+  learning_rate: 1e-3
+
+scheduler:
+  eta_min: 1e-7
 ```
 
 **models/bert.yaml**
@@ -209,14 +280,40 @@ output_path: output/models/mlp.pt
 
 ## Inference
 
-### Batch inference
+### Тестирование на test dataset
+
+Оценка качества модели на тестовой выборке:
 
 ```bash
-# Предсказания на файле
+# BERT модель (по умолчанию)
 uv run --project classification python commands.py infer
 
-# С указанием модели
+# MLP модель
 uv run --project classification python commands.py infer models=mlp
+```
+
+Результаты выводятся в консоль:
+
+```
+=== Test Results ===
+test_loss: 0.4523
+test_accuracy: 0.8934
+test_f1_weighted: 0.8912
+test_f1_macro: 0.8567
+test_auroc_weighted: 0.9823
+test_auroc_macro: 0.9756
+```
+
+### Batch предсказания на новых данных
+
+Предсказания для файла `data/predict.csv`:
+
+```bash
+# С BERT моделью
+uv run --project classification python commands.py predict
+
+# С MLP моделью
+uv run --project classification python commands.py predict models=mlp
 ```
 
 Результаты сохраняются в `output/predictions/predictions.csv`
@@ -235,14 +332,42 @@ uv run --project classification python commands.py serve --port 8000 --reload
 
 - `GET /health` — проверка состояния
 - `GET /models` — список загруженных моделей
-- `POST /predict` — предсказание
+- `POST /predict` — предсказание для одного сообщения
 
-#### Пример запроса
+#### Примеры запросов
 
 ```bash
+# Health check
+curl http://localhost:8000/health
+
+# Список моделей
+curl http://localhost:8000/models
+
+# Предсказание с BERT
 curl -X POST http://localhost:8000/predict \
   -H "Content-Type: application/json" \
   -d '{"text": "Скидка 50% на ремонт компьютеров!", "model_type": "bert"}'
+
+# Предсказание с MLP
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Одобрен кредит на 500000 рублей", "model_type": "mlp"}'
+```
+
+#### Пример ответа
+
+```json
+{
+  "text": "Скидка 50% на ремонт компьютеров!",
+  "predicted_class": "Товары/Электроника",
+  "confidence": 0.9234,
+  "probabilities": {
+    "Товары/Электроника": 0.9234,
+    "Займы": 0.0321,
+    "Страховые услуги": 0.0156,
+    ...
+  }
+}
 ```
 
 ## Docker
@@ -289,6 +414,17 @@ cd classification
 uv add <package>
 ```
 
+### CI/CD
+
+Проект использует GitHub Actions для автоматической проверки качества кода.
+
+#### Workflow
+
+При каждом push и pull request в main запускается проверка pre-commit хуков:
+
+- Ruff (форматирование и линтинг)
+- Другие настроенные хуки
+
 ## Технологии
 
 | Компонент                 | Технология        |
@@ -301,3 +437,13 @@ uv add <package>
 | API                       | FastAPI           |
 | Code quality              | Ruff, pre-commit  |
 | Контейнеризация           | Docker            |
+
+## Лицензия
+
+MIT
+
+MLflow by [MLflow](https://mlflow.org/) ![MLflow.png](data_example/MLflow.png)
+
+Server by [FastAPI](https://fastapi.tiangolo.com/)
+![SMS-Classification-API-Swagger-UI.png](data_example/SMS-Classification-API-Swagger-UI.png)
+![SMS-Classification-API-Swagger-UI1.png](data_example/SMS-Classification-API-Swagger-UI1.png)

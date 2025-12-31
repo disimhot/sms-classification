@@ -3,9 +3,14 @@ from pathlib import Path
 
 import lightning as pl
 import torch
-from classification.data.dataset_loader import SMSDataManager
+from classification.data.dataset_loader import DataManagerConfig, SMSDataManager
 from classification.data.preprocess import TextPreprocessor
-from classification.models.bert import BertClassifier, BertDataset, BertTokenizerWrapper, collate_fn
+from classification.models.bert import (
+    BertClassifier,
+    BertDataset,
+    BertTokenizerWrapper,
+    collate_fn,
+)
 from classification.models.loss import compute_class_weights
 from classification.models.mlp import MLPClassifier
 from classification.models.word2vec import Word2VecDataset, Word2VecEmbedder
@@ -16,14 +21,14 @@ from classification.utils.data_util import ensure_data_downloaded
 from omegaconf import OmegaConf
 
 
-def train(overrides: list[str] | None = None):
+def train(*overrides):
     """
     Train SMS classification model.
 
     Args:
-        overrides: List of Hydra config overrides, e.g. ["models=mlp", "training.max_epochs=5"]
+        overrides: Hydra config overrides, e.g. models=mlp training.max_epochs=5
     """
-    cfg = load_config(overrides)
+    cfg = load_config(list(overrides) if overrides else None)
 
     data_dir = Path(cfg.data.data_dir)
     required_paths = [
@@ -38,33 +43,29 @@ def train(overrides: list[str] | None = None):
 
     pl.seed_everything(cfg.seed)
 
-    manager = SMSDataManager(data_dir)
+    data_config = DataManagerConfig(
+        data_dir=data_dir,
+        train_file=cfg.data.train_file,
+        val_file=cfg.data.val_file,
+        test_file=cfg.data.test_file,
+        predict_file=cfg.data.predict_file,
+    )
+    manager = SMSDataManager(data_config)
     data = manager.load_all()
-
     manager.save_label_encoder()
+    num_classes = len(manager.id2label)
 
-    train_texts = data["train"]["text"].tolist()
-    val_texts = data["val"]["text"].tolist()
     train_labels = data["train"]["label"].tolist()
-    val_labels = data["val"]["label"].tolist()
+    class_weights = compute_class_weights(train_labels, num_classes)
 
-    # Compute class weights
-    class_weights = compute_class_weights(train_labels, cfg.module.num_classes)
-
-    # Create model and dataloaders based on model type
     if cfg.models.type == "mlp":
-        model, train_loader, val_loader = _setup_mlp(
-            cfg, train_texts, val_texts, train_labels, val_labels
-        )
+        model, train_loader, val_loader = _setup_mlp(cfg, num_classes, data)
     elif cfg.models.type == "bert":
-        model, train_loader, val_loader = _setup_bert(
-            cfg, train_texts, val_texts, train_labels, val_labels
-        )
+        model, train_loader, val_loader = _setup_bert(cfg, num_classes, data)
 
-    # Create Lightning module
     module = SMSClassificationModule(
         model=model,
-        num_classes=cfg.module.num_classes,
+        num_classes=num_classes,
         class_weights=class_weights,
         learning_rate=cfg.module.optimizer.learning_rate,
         loss_type=cfg.module.loss.type,
@@ -108,6 +109,7 @@ def train(overrides: list[str] | None = None):
     trainer = pl.Trainer(
         max_epochs=cfg.training.max_epochs,
         log_every_n_steps=cfg.training.log_every_n_steps,
+        accumulate_grad_batches=4,
         accelerator="auto",
         devices="auto",
         logger=loggers,
@@ -116,12 +118,16 @@ def train(overrides: list[str] | None = None):
 
     trainer.fit(module, train_dataloaders=train_loader, val_dataloaders=val_loader)
 
-    # Save final model
     torch.save(module.model.state_dict(), cfg.models.output_path)
 
 
-def _setup_mlp(cfg, train_texts, val_texts, train_labels, val_labels):
+def _setup_mlp(cfg, num_classes: int, data: dict):
     """Setup MLP model with Word2Vec embeddings."""
+    train_texts = data["train"]["text"].tolist()
+    val_texts = data["val"]["text"].tolist()
+    train_labels = data["train"]["label"].tolist()
+    val_labels = data["val"]["label"].tolist()
+
     preprocessor = TextPreprocessor(language="russian")
 
     train_clean = [preprocessor.preprocess_text(t) for t in train_texts]
@@ -130,7 +136,7 @@ def _setup_mlp(cfg, train_texts, val_texts, train_labels, val_labels):
     train_tokenized = [text.split() for text in train_clean]
     val_tokenized = [text.split() for text in val_clean]
 
-    # Train Word2Vec
+    # Word2Vec
     w2v_cfg = cfg.models.word2vec
     embedder = Word2VecEmbedder(
         vector_size=w2v_cfg.vector_size,
@@ -142,10 +148,8 @@ def _setup_mlp(cfg, train_texts, val_texts, train_labels, val_labels):
     train_embeddings = embedder.fit_transform(train_tokenized, epochs=w2v_cfg.epochs)
     val_embeddings = embedder.transform(val_tokenized)
 
-    # Save Word2Vec
     embedder.save(w2v_cfg.output_path)
 
-    # Datasets
     train_dataset = Word2VecDataset(train_embeddings, train_labels)
     val_dataset = Word2VecDataset(val_embeddings, val_labels)
 
@@ -158,15 +162,20 @@ def _setup_mlp(cfg, train_texts, val_texts, train_labels, val_labels):
 
     model = MLPClassifier(
         input_dim=w2v_cfg.vector_size,
-        num_classes=cfg.module.num_classes,
+        num_classes=num_classes,
         dropout=cfg.models.dropout,
     )
 
     return model, train_loader, val_loader
 
 
-def _setup_bert(cfg, train_texts, val_texts, train_labels, val_labels):
+def _setup_bert(cfg, num_classes: int, data: dict):
     """Setup BERT model."""
+    train_texts = data["train"]["text"].tolist()
+    val_texts = data["val"]["text"].tolist()
+    train_labels = data["train"]["label"].tolist()
+    val_labels = data["val"]["label"].tolist()
+
     tokenizer = BertTokenizerWrapper(
         pretrained_model=cfg.models.pretrained_model,
         max_length=cfg.models.max_length,
@@ -189,7 +198,7 @@ def _setup_bert(cfg, train_texts, val_texts, train_labels, val_labels):
     )
 
     model = BertClassifier(
-        num_classes=cfg.module.num_classes,
+        num_classes=num_classes,
         pretrained_model=cfg.models.pretrained_model,
         dropout=cfg.models.dropout,
         freeze_bert=cfg.models.freeze_bert,

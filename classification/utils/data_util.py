@@ -6,10 +6,10 @@ from dotenv import load_dotenv
 
 def dvc_pull() -> bool:
     """
-    Выполняет dvc pull с обработкой ошибок.
+    Make DVC pull.
 
     Returns:
-        bool: Успешно ли выполнена загрузка
+        bool: Success of DVC pull
     """
     load_dotenv()
 
@@ -25,22 +25,22 @@ def dvc_pull() -> bool:
 
 def ensure_data_downloaded(required_paths: list[str | Path]) -> bool:
     """
-    Проверяет наличие путей и загружает недостающие через DVC.
+    Ensure that all required data is downloaded.
 
     Args:
-        required_paths: Список необходимых путей (папки/файлы)
+        required_paths: List of paths to check
 
     Returns:
-        bool: Существуют ли все пути после выполнения
+        bool: True if all required data is downloaded
     """
     paths = [Path(p) for p in required_paths]
     missing_paths = [p for p in paths if not p.exists()]
 
     if not missing_paths:
-        print("Все данные на месте.")
+        print("All required data is downloaded.")
         return True
 
-    print(f"Отсутствуют: {missing_paths}. Загружаю через DVC...")
+    print(f"Absent data: {missing_paths}")
     success = dvc_pull()
 
     if not success:
@@ -48,8 +48,8 @@ def ensure_data_downloaded(required_paths: list[str | Path]) -> bool:
 
     still_missing = [p for p in paths if not p.exists()]
     if still_missing:
-        print(f"После DVC pull всё ещё отсутствуют: {still_missing}")
+        print(f"Still missing data: {still_missing}")
         return False
 
-    print("Данные успешно загружены.")
+    print("All required data is downloaded.")
     return True

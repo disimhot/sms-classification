@@ -1,7 +1,7 @@
 from collections import Counter
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as tf
 from torch import nn
 
 
@@ -62,7 +62,7 @@ class FocalLoss(nn.Module):
         Returns:
             Computed focal loss
         """
-        ce_loss = F.cross_entropy(inputs, targets, reduction="none")
+        ce_loss = tf.cross_entropy(inputs, targets, reduction="none")
         pt = torch.exp(-ce_loss)
         focal_loss = ((1 - pt) ** self.gamma) * ce_loss
 
@@ -116,7 +116,7 @@ class LabelSmoothingLoss(nn.Module):
         one_hot = torch.full_like(inputs, smooth_value)
         one_hot.scatter_(1, targets.unsqueeze(1), confidence)
 
-        log_probs = F.log_softmax(inputs, dim=1)
+        log_probs = tf.log_softmax(inputs, dim=1)
 
         if self.weight is not None:
             weight = self.weight.to(inputs.device)

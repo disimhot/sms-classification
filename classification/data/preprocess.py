@@ -55,7 +55,7 @@ class TextPreprocessor:
         return re.sub(r"\s+", " ", text).strip()
 
     def _remove_quotes(self, text: str) -> str:
-        return re.sub(r"[«»\"“”„'‘’]", "", text)
+        return re.sub(r"[«»\"“”„'‘’]", "", text)  # noqa: RUF001
 
     def _remove_punctuation(self, text: str) -> str:
         translator = str.maketrans("", "", string.punctuation.replace(".", "").replace("%", ""))

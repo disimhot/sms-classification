@@ -292,7 +292,7 @@ uv run --project classification python commands.py infer
 uv run --project classification python commands.py infer models=mlp
 ```
 
-Результаты выводятся в консоль:
+Результаты дополнительно выводятся в консоль:
 
 ```
 === Test Results ===

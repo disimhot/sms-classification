@@ -1,74 +1,79 @@
-import lightning as L
+from dataclasses import dataclass
+
+import lightning as pl
 import torch
 import torchmetrics
 from classification.models.loss import FocalLoss
 from torch import nn
 
 
-class SMSClassificationModule(L.LightningModule):
+@dataclass
+class ModuleConfig:
+    """Configuration for SMSClassificationModule."""
+
+    num_classes: int = 13
+    learning_rate: float = 1e-3
+    loss_type: str = "cross_entropy"
+    focal_gamma: float = 2.0
+    scheduler_eta_min: float = 1e-7
+    class_weights: torch.Tensor | None = None
+
+
+class SMSClassificationModule(pl.LightningModule):
     """
     Lightning module for multi-class SMS classification.
 
     Args:
         model: Neural network model (BERT or MLP)
-        num_classes: Number of target classes (default 13)
-        class_weights: Optional class weights for imbalanced data
-        learning_rate: Learning rate for optimizer
-        loss_type: Loss function type ('cross_entropy', 'focal', 'nll')
-        focal_gamma: Gamma parameter for Focal Los
-        scheduler_eta_min: Minimum learning rate for scheduler
+        config: Module configuration
     """
 
-    def __init__(
-        self,
-        model: nn.Module,
-        num_classes: int = 13,
-        class_weights: torch.Tensor | None = None,
-        learning_rate: float = 1e-3,
-        loss_type: str = "cross_entropy",
-        focal_gamma: float = 2.0,
-        scheduler_eta_min: float = 1e-7,
-    ):
+    def __init__(self, model: nn.Module, config: ModuleConfig):
         super().__init__()
         self.save_hyperparameters(ignore=["model", "criterion"])
 
         self.model = model
-        self.num_classes = num_classes
-        self.learning_rate = learning_rate
-        self.scheduler_eta_min = scheduler_eta_min
+        self.num_classes = config.num_classes
+        self.learning_rate = config.learning_rate
+        self.scheduler_eta_min = config.scheduler_eta_min
 
         # Loss
-        self.criterion = self._create_loss(loss_type, class_weights, focal_gamma)
+        self.criterion = self._create_loss(
+            config.loss_type, config.class_weights, config.focal_gamma
+        )
 
         # Validation metrics
         self.val_f1_weighted = torchmetrics.F1Score(
-            task="multiclass", num_classes=num_classes, average="weighted"
+            task="multiclass", num_classes=config.num_classes, average="weighted"
         )
+
         self.val_f1_macro = torchmetrics.F1Score(
-            task="multiclass", num_classes=num_classes, average="macro"
+            task="multiclass", num_classes=config.num_classes, average="macro"
         )
         self.val_auroc_weighted = torchmetrics.AUROC(
-            task="multiclass", num_classes=num_classes, average="weighted"
+            task="multiclass", num_classes=config.num_classes, average="weighted"
         )
         self.val_auroc_macro = torchmetrics.AUROC(
-            task="multiclass", num_classes=num_classes, average="macro"
+            task="multiclass", num_classes=config.num_classes, average="macro"
         )
-        self.val_accuracy = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
+        self.val_accuracy = torchmetrics.Accuracy(task="multiclass", num_classes=config.num_classes)
 
         # Test metrics
         self.test_f1_weighted = torchmetrics.F1Score(
-            task="multiclass", num_classes=num_classes, average="weighted"
+            task="multiclass", num_classes=config.num_classes, average="weighted"
         )
         self.test_f1_macro = torchmetrics.F1Score(
-            task="multiclass", num_classes=num_classes, average="macro"
+            task="multiclass", num_classes=config.num_classes, average="macro"
         )
         self.test_auroc_weighted = torchmetrics.AUROC(
-            task="multiclass", num_classes=num_classes, average="weighted"
+            task="multiclass", num_classes=config.num_classes, average="weighted"
         )
         self.test_auroc_macro = torchmetrics.AUROC(
-            task="multiclass", num_classes=num_classes, average="macro"
+            task="multiclass", num_classes=config.num_classes, average="macro"
         )
-        self.test_accuracy = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
+        self.test_accuracy = torchmetrics.Accuracy(
+            task="multiclass", num_classes=config.num_classes
+        )
 
     def _create_loss(self, loss_type, class_weights, focal_gamma):
         if loss_type == "cross_entropy":

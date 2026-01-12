@@ -19,11 +19,6 @@
 - **Разбиение**: train/val/test
 - **Хранение**: DVC (Data Version Control)
 
-> ⚠️ **Важно**: В папке
-> https://drive.google.com/drive/folders/1OpsoxTVF5wgCMFRi6KoErKTYVIRVvFOe?usp=sharing
-> оставлены сэпмлы нечувствительных данных. За ключами доступа к S3/DVC
-> обращайтесь лично к автору проекта тг @ElenaSergeevna.
-
 ### Модели
 
 Проект поддерживает две архитектуры:
